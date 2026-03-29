@@ -5,6 +5,7 @@ Simple MTA:SA login panel
 - Configurable
 - Modify-friendly
 - Basic security included
+- Localization support (see [ml_shared.lua](ml_shared.lua))
 - Can be used as a template for your own login panel
 
 ## Quick start
