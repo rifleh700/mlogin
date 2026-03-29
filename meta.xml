@@ -1,0 +1,27 @@
+<meta>
+
+    <info
+        author="matran/rifleh"
+        version="1.0.0"
+        name="mlogin"
+        description="Login panel"
+        type="script"
+    />
+
+    <!-- must be last-->
+    <download_priority_group>-1000</download_priority_group>
+
+    <script src="ml_shared.lua" type="shared" cache="false"/>
+
+    <script src="ml_gui_client.lua" type="client" cache="false"/>
+    <script src="ml_main_client.lua" type="client" cache="false"/>
+
+    <script src="ml_main_server.lua" type="server"/>
+
+    <aclrequest>
+        <right name="function.addAccount" access="true"/>
+        <right name="function.logIn" access="true"/>
+        <right name="function.kickPlayer" access="true"/>
+    </aclrequest>
+
+</meta>
