@@ -87,7 +87,7 @@ local function initLogin()
     x = x + LABEL_WIDTH + MARGIN
     gui.login.passEdit = guiCreateEdit(x, y, EDIT_WIDTH, ROW_HEIGHT, "", false, gui.login.window)
     guiEditSetMasked(gui.login.passEdit, true)
-    guiEditSetMaxLength(gui.login.passEdit, 30)
+    guiEditSetMaxLength(gui.login.passEdit, 2048)
     y = y + ROW_HEIGHT + MARGIN
 
     if LOGIN_REMEMBER_ME then
@@ -181,7 +181,7 @@ local function initRegister()
     guiCenter(gui.register.window)
 
     addEventHandler("onClientGUIClick", gui.register.acceptButton, acceptRegister, false)
-    addEventHandler("onClientGUIClick", gui.register.loginButton, function() showLogin() end, false)
+    addEventHandler("onClientGUIClick", gui.register.loginButton, function() showLogin(guiGetText(gui.login.nameEdit), isRememberMeEnabled()) end, false)
     addEventHandler("onClientGUIAccepted", gui.register.nameEdit, acceptRegister)
     addEventHandler("onClientGUIAccepted", gui.register.passEdit, acceptRegister)
     addEventHandler("onClientGUIAccepted", gui.register.repeatPassEdit, acceptRegister)

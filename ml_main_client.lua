@@ -1,4 +1,5 @@
 local ACCOUNT_FILE_PATH = "@account"
+local TOKEN_FILE_PATH = "@token"
 local FILE_SIZE_MAX = 4096
 
 ------------------------------------------------------------------------------------------------------------------------
@@ -16,11 +17,11 @@ mloginData.accountName = nil
 ------------------------------------------------------------------------------------------------------------------------
 
 
-local function loadFileAccount()
+local function fileReadAll(path)
 
-    if not fileExists(ACCOUNT_FILE_PATH) then return nil end
+    if not fileExists(path) then return nil end
 
-    local file = fileOpen(ACCOUNT_FILE_PATH)
+    local file = fileOpen(path)
     if not file then return nil end
 
     local size = fileGetSize(file)
@@ -29,21 +30,21 @@ local function loadFileAccount()
         return nil
     end
 
-    local name = fileRead(file, size)
+    local data = fileRead(file, size)
     fileClose(file)
 
-    if name == "" then return nil end
+    if data == "" then return nil end
 
-    return name
+    return data
 end
 
-local function saveFileAccount(name)
+local function fileWriteAll(path, data)
 
-    local file = fileCreate(ACCOUNT_FILE_PATH)
+    local file = fileCreate(path)
     if not file then return false end
 
-    if name then
-        fileWrite(file, name)
+    if data then
+        fileWrite(file, data)
     end
 
     fileClose(file)
@@ -72,18 +73,24 @@ function requestLogin(accountName, accountPassword)
 
     showLoginMessage()
     setLoginEnabled(false)
-    triggerServerEvent("mlogin.requestLogin", localPlayer, accountName, accountPassword)
+    triggerServerEvent("mlogin.requestLogin", localPlayer, accountName, accountPassword, mloginData.token, isRememberMeEnabled())
 end
 
 addEvent("mlogin.requestLogin.response", true)
 addEventHandler("mlogin.requestLogin.response", localPlayer,
-    function(status, accountName, attemptsLeft)
+    function(status, accountName, attemptsLeft, token)
 
         if status == STATUS_CODE.OK or status == STATUS_CODE.ALREADY_LOGGED_IN_CURRENT_ACCOUNT then
             showLoginMessage(TEXT.SUCCESSFUL_LOGIN, true)
             hide()
             mloginData.accountName = accountName
-            saveFileAccount(LOGIN_REMEMBER_ME and isRememberMeEnabled() and accountName or nil)
+            mloginData.token = token
+
+            if token or (not isRememberMeEnabled()) then
+                fileWriteAll(ACCOUNT_FILE_PATH, isRememberMeEnabled() and accountName or nil)
+                fileWriteAll(TOKEN_FILE_PATH, isRememberMeEnabled() and token or nil)
+            end
+
             return
         end
 
@@ -140,7 +147,8 @@ addEventHandler("mlogin.requestRegister.response", localPlayer,
 
 local function init()
 
-    mloginData.accountName = loadFileAccount()
+    mloginData.accountName = fileReadAll(ACCOUNT_FILE_PATH)
+    mloginData.token = fileReadAll(TOKEN_FILE_PATH)
 
 end
 
@@ -149,6 +157,6 @@ addEventHandler("onClientResourceStart", resourceRoot, init)
 addEvent("mlogin.showPanel", true)
 addEventHandler("mlogin.showPanel", localPlayer,
     function()
-        showLogin(mloginData.accountName)
+        showLogin(mloginData.accountName, mloginData.token)
     end
 )

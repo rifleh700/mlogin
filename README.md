@@ -7,6 +7,7 @@ Simple MTA:SA login panel
 - Basic security included
 - Localization support (see [ml_shared.lua](ml_shared.lua))
 - Can be used as a template for your own login panel
+- Remember me
 
 ## Quick start
 Please execute `aclrequest allow mlogin all` command before using. The resource requires the following rights
@@ -21,16 +22,15 @@ Please execute `aclrequest allow mlogin all` command before using. The resource 
 > Resource must be downloaded last, so it has low priority `<download_priority_group>-1000</download_priority_group>`
 
 ## Remember me
-The resource does not implement "Remember me" feature since it's impossible to keep default `/login` command working at same time (or it will be unsecure implementation).
+The resource implements "Remember me" feature by encryption. However, it is not fully secure way. We use encryption since it's impossible to keep default `/login` command working at same time. U can disable this feature (see settings below) or implement your own. 
 More info:
 - https://forum.multitheftauto.com/topic/112973-handling-user-credentials-authentication/
 - https://wiki.multitheftauto.com/wiki/PasswordHash (look example)
 
-However, resource has some stubs for your own implementations. See `LOGIN_REMEMBER_ME` setting.
-
 
 ## Settings
 You can configure this resource with predefined global Lua variables (see script files). Some of important settings are below
+- `ml_shared.lua` `LOGIN_REMEMBER_ME` (default value is `true`) enables "Remember me" feature 
 - `ml_shared.lua` `LOGIN_GUEST` (default value is `false`) allows login as guest
 - `ml_main_server.lua` `LOGIN_COMMAND_DISABLED` (default value is `true`) disables `login` command
 - `ml_main_server.lua` `LOGOUT_COMMAND_DISABLED` (default value is `true`) disables `logout` command
@@ -48,5 +48,5 @@ You can configure this resource with predefined global Lua variables (see script
 
 ## Screenshots
 
-![screenshot1](https://i.imgur.com/5w9kTPg.jpeg)
+![screenshot1](https://i.imgur.com/VzRCP2t.jpeg)
 ![screenshot2](https://i.imgur.com/rw5J49U.jpeg)

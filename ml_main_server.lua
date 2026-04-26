@@ -2,6 +2,7 @@ local LOGIN_WHEN_LOGGED_IN = false
 local LOGIN_BLOCK_IF_LAST_SERIAL_DIFFERENT = false
 local LOGIN_BLOCK_IF_REGISTER_SERIAL_DIFFERENT = false
 local LOGIN_ATTEMPTS_LIMIT = 5
+local LOGIN_TOKEN_ACCOUNT_DATA = "token"
 local LOGIN_COMMAND_DISABLED = true
 local LOGOUT_COMMAND_DISABLED = true
 
@@ -35,6 +36,7 @@ local playersData = {}
 ------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------
+
 
 local function outputDebugStringEventSecurity(message)
 
@@ -87,10 +89,65 @@ function getAccountSerialNotBlank(account)
     return serial
 end
 
+local function logInSavingToken(player, account, accountPassword)
+
+    local loggedIn = logIn(player, account, accountPassword)
+    if not loggedIn then return false end
+
+    -- uses IV as secure random key
+    local _, salt = encodeString("aes128", "", { key = "****************" })
+    local _, key = encodeString("aes128", "", { key = "****************" })
+    local encrypted, iv = encodeString("aes128", salt .. accountPassword, { key = key })
+    local playerToken = encodeString("base64", encrypted)
+    setAccountData(account, LOGIN_TOKEN_ACCOUNT_DATA, key .. iv)
+
+    return loggedIn, playerToken
+end
+
+local function logInByToken(player, account, playerToken)
+
+    local accountToken = getAccountData(account, LOGIN_TOKEN_ACCOUNT_DATA)
+    if (not accountToken or string.len(accountToken) ~= 32) then return false end
+
+    -- hardcoded last serial check
+    local accountLastSerial = getAccountSerialNotBlank(account)
+    if not accountLastSerial then return false end
+    if getPlayerSerial(player) ~= accountLastSerial then return false end
+
+    local key = string.sub(accountToken, 1, 16)
+    local iv = string.sub(accountToken, 17, 32)
+    local encrypted = decodeString("base64", playerToken)
+    local data = decodeString("aes128", encrypted, { key = key, iv = iv })
+    local password = string.sub(data, 17)
+
+    return logIn(player, account, password)
+end
+
 
 ------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------------------------------
+
+
+local function recordPlayerRegisterFailedAttempt(player)
+
+    if not playersData[player] then playersData[player] = {} end
+    if not playersData[player].registerAttemptsLeft then playersData[player].registerAttemptsLeft = REGISTER_ATTEMPTS_LIMIT end
+
+    playersData[player].registerAttemptsLeft = playersData[player].registerAttemptsLeft - 1
+
+    return playersData[player].registerAttemptsLeft
+end
+
+local function recordPlayerLoginFailedAttempt(player)
+
+    if not playersData[player] then playersData[player] = {} end
+    if not playersData[player].loginAttemptsLeft then playersData[player].loginAttemptsLeft = LOGIN_ATTEMPTS_LIMIT end
+
+    playersData[player].loginAttemptsLeft = playersData[player].loginAttemptsLeft - 1
+
+    return playersData[player].loginAttemptsLeft
+end
 
 local function preparePlayer(player)
 
@@ -163,89 +220,106 @@ addEventHandler("mlogin.requestGuest", root,
     end
 )
 
+local function requestLoginPlayer(player, accountName, accountPassword, playerToken, rememberMe)
+
+    local currentAccount = getPlayerAccount(player)
+    if (not LOGIN_WHEN_LOGGED_IN) and (not isGuestAccount(currentAccount)) then return STATUS_CODE.ALREADY_LOGGED_IN end
+
+    if (not accountName) or accountName == "" then return STATUS_CODE.NAME_IS_EMPTY end
+    if (not accountPassword) or accountPassword == "" then return STATUS_CODE.PASSWORD_IS_EMPTY end
+
+    if LOGIN_REMEMBER_ME and accountPassword == LOGIN_REMEMBER_ME_PASSWORD and playerToken then
+        local account = getAccount(accountName)
+        if not account then return STATUS_CODE.WRONG_NAME_PASSWORD_PAIR end
+        local loggedIn = logInByToken(player, account, playerToken)
+        if loggedIn then return STATUS_CODE.OK, account end
+        return STATUS_CODE.WRONG_NAME_PASSWORD_PAIR
+    end
+
+    local account = getAccount(accountName, accountPassword)
+    if not account then return STATUS_CODE.WRONG_NAME_PASSWORD_PAIR end
+
+    if LOGIN_WHEN_LOGGED_IN and getAccountName(currentAccount) == accountName then
+        return STATUS_CODE.ALREADY_LOGGED_IN_CURRENT_ACCOUNT end
+
+    local playerSerial = getPlayerSerial(player)
+    local accountLastSerial = getAccountSerialNotBlank(account)
+
+    if accountLastSerial and LOGIN_BLOCK_IF_LAST_SERIAL_DIFFERENT and (playerSerial ~= accountLastSerial) then
+        return STATUS_CODE.LAST_SERIAL_DIFFERENT end
+
+    if LOGIN_BLOCK_IF_REGISTER_SERIAL_DIFFERENT then
+        local accountRegisterSerial = getAccountData(account, REGISTER_SAVE_SERIAL_ACCOUNT_DATA)
+        if accountRegisterSerial and accountRegisterSerial ~= playerSerial then return STATUS_CODE.REGISTER_SERIAL_DIFFERENT end
+    end
+
+    local accountPlayer = getAccountPlayer(account)
+    if accountPlayer then return STATUS_CODE.ACCOUNT_IS_OCCUPIED end
+
+    if currentAccount then logOut(player) end
+
+    local loggedIn, token = false, nil
+    if LOGIN_REMEMBER_ME and rememberMe then
+        loggedIn, token = logInSavingToken(player, account, accountPassword)
+    else
+        loggedIn = logIn(player, account, accountPassword)
+    end
+    if not loggedIn then return STATUS_CODE.UNKNOWN_ERROR end
+
+    return STATUS_CODE.OK, account, token
+end
+
 addEvent("mlogin.requestLogin", true)
 addEventHandler("mlogin.requestLogin", root,
-    function(accountName, accountPassword)
+    function(accountName, accountPassword, playerToken, rememberMe)
 
         if not checkEventClientTrigger() then return end
         local player = client
 
-        local currentAccount = getPlayerAccount(player)
-        if (not LOGIN_WHEN_LOGGED_IN) and (not isGuestAccount(currentAccount)) then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.ALREADY_LOGGED_IN)
-            return
-        end
+        local status, account, token = requestLoginPlayer(player, accountName, accountPassword, playerToken, rememberMe)
 
-        if (not accountName) or accountName == "" then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.NAME_IS_EMPTY)
-            return
-        end
+        if status == STATUS_CODE.WRONG_NAME_PASSWORD_PAIR then
 
-        if (not accountPassword) or accountPassword == "" then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.PASSWORD_IS_EMPTY)
-            return
-        end
-
-        if LOGIN_REMEMBER_ME and accountPassword == LOGIN_REMEMBER_ME_PASSWORD then
-            -- autologin...
-        end
-
-        local account = getAccount(accountName, accountPassword)
-        if not account then
-
-            if not playersData[player] then playersData[player] = {} end
-            playersData[player].loginAttempts = (playersData[player].loginAttempts or 0) + 1
-            local attemptsLeft = LOGIN_ATTEMPTS_LIMIT - playersData[player].loginAttempts
-
-            if attemptsLeft <= 0 then
+            local loginAttemptsLeft = recordPlayerLoginFailedAttempt(player)
+            if loginAttemptsLeft <= 0 then
                 kickPlayer(player, TEXT.LOGIN_ATTEMPTS_LIMIT_REACHED)
                 return
             end
 
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.WRONG_NAME_PASSWORD_PAIR, accountName, attemptsLeft)
+            triggerClientEvent(player, "mlogin.requestLogin.response", player, status, accountName, loginAttemptsLeft)
             return
         end
 
-        if LOGIN_WHEN_LOGGED_IN and getAccountName(currentAccount) == accountName then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.ALREADY_LOGGED_IN_CURRENT_ACCOUNT)
-            return
+        triggerClientEvent(player, "mlogin.requestLogin.response", player, status, accountName, 0, token)
+
+        if status == STATUS_CODE.OK then
+            finishPlayerLogin(player)
+            triggerEvent("mlogin.onPlayerLogin", player, account)
         end
-
-        local playerSerial = getPlayerSerial(player)
-        local accountLastSerial = getAccountSerialNotBlank(account)
-
-        if accountLastSerial and LOGIN_BLOCK_IF_LAST_SERIAL_DIFFERENT and (playerSerial ~= accountLastSerial) then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.LAST_SERIAL_DIFFERENT)
-            return
-        end
-
-        if LOGIN_BLOCK_IF_REGISTER_SERIAL_DIFFERENT then
-            local accountRegisterSerial = getAccountData(account, REGISTER_SAVE_SERIAL_ACCOUNT_DATA)
-            if accountRegisterSerial and accountRegisterSerial ~= playerSerial then
-                triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.REGISTER_SERIAL_DIFFERENT)
-                return
-            end
-        end
-
-        local accountPlayer = getAccountPlayer(account)
-        if accountPlayer then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.ACCOUNT_IS_OCCUPIED)
-            return
-        end
-
-        if currentAccount then logOut(player) end
-        local login = logIn(player, account, accountPassword)
-        if not login then
-            triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.UNKNOWN_ERROR)
-            return
-        end
-
-        triggerClientEvent(player, "mlogin.requestLogin.response", player, STATUS_CODE.OK, accountName)
-        triggerEvent("mlogin.onPlayerLogin", player, account)
-        finishPlayerLogin(player)
 
     end
 )
+
+local function requestRegisterPlayer(player, accountName, accountPassword, accountRepeatPassword)
+
+    local currentAccount = getPlayerAccount(player)
+    if (not REGISTER_WHEN_LOGGED_IN) and (not isGuestAccount(currentAccount)) then return STATUS_CODE.ALREADY_LOGGED_IN end
+
+    local status = validateAccountNamePassword(accountName, accountPassword, accountRepeatPassword)
+    if status ~= STATUS_CODE.OK then return status end
+
+    local existedAccount = getAccount(accountName)
+    if existedAccount then return STATUS_CODE.NAME_ALREADY_EXISTS end
+
+    local addAccountResult = addAccount(accountName, accountPassword)
+    if not addAccountResult then return STATUS_CODE.UNKNOWN_ERROR end
+
+    if REGISTER_SAVE_SERIAL then
+        setAccountData(addAccountResult, REGISTER_SAVE_SERIAL_ACCOUNT_DATA, getPlayerSerial(player))
+    end
+
+    return STATUS_CODE.OK, addAccountResult
+end
 
 addEvent("mlogin.requestRegister", true)
 addEventHandler("mlogin.requestRegister", root,
@@ -254,46 +328,21 @@ addEventHandler("mlogin.requestRegister", root,
         if not checkEventClientTrigger() then return end
         local player = client
 
-        local currentAccount = getPlayerAccount(player)
-        if (not REGISTER_WHEN_LOGGED_IN) and (not isGuestAccount(currentAccount)) then
-            triggerClientEvent(player, "mlogin.requestRegister.response", player, STATUS_CODE.ALREADY_LOGGED_IN)
-            return
-        end
+        local status, account = requestRegisterPlayer(player, accountName, accountPassword, accountRepeatPassword)
 
-        local status = validateAccountNamePassword(accountName, accountPassword, accountRepeatPassword)
-        if status ~= STATUS_CODE.OK then
-            triggerClientEvent(player, "mlogin.requestRegister.response", player, status)
-            return
-        end
-
-        local existedAccount = getAccount(accountName)
-        if existedAccount then
-
-            if not playersData[player] then playersData[player] = {} end
-            playersData[player].registerAttempts = (playersData[player].registerAttempts or 0) + 1
-            local attemptsLeft = REGISTER_ATTEMPTS_LIMIT - playersData[player].registerAttempts
-
-            if attemptsLeft <= 0 then
+        if status == STATUS_CODE.NAME_ALREADY_EXISTS then
+            local registerAttemptsLeft = recordPlayerRegisterFailedAttempt(player)
+            if registerAttemptsLeft <= 0 then
                 kickPlayer(player, TEXT.REGISTER_ATTEMPTS_LIMIT_REACHED)
                 return
             end
-
-            triggerClientEvent(player, "mlogin.requestRegister.response", player, STATUS_CODE.NAME_ALREADY_EXISTS)
-            return
         end
 
-        local addAccountResult = addAccount(accountName, accountPassword)
-        if not addAccountResult then
-            triggerClientEvent(player, "mlogin.requestRegister.response", player, STATUS_CODE.UNKNOWN_ERROR)
-            return
-        end
+        triggerClientEvent(player, "mlogin.requestRegister.response", player, status, accountName)
 
-        if REGISTER_SAVE_SERIAL then
-            setAccountData(addAccountResult, REGISTER_SAVE_SERIAL_ACCOUNT_DATA, getPlayerSerial(player))
+        if status == STATUS_CODE.OK then
+            triggerEvent("mlogin.onPlayerRegistered", player, account)
         end
-
-        triggerClientEvent(player, "mlogin.requestRegister.response", player, STATUS_CODE.OK, accountName)
-        triggerEvent("mlogin.onPlayerRegistered", player, addAccountResult)
     end
 )
 
