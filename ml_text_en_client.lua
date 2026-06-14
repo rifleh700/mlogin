@@ -1,0 +1,33 @@
+
+TEXT = {
+    LOGIN_ATTEMPTS_LIMIT_REACHED = "Login attempts limit has been reached",
+    REGISTER_ATTEMPTS_LIMIT_REACHED = "Register attempts limit has been reached",
+    LOGIN = "Login",
+    GUEST = "Guest",
+    REGISTER = "Register",
+    NAME = "Name",
+    PASSWORD = "Password",
+    REPEAT_PASSWORD = "Repeat",
+    REMEMBER_ME = "Remember me",
+    NAME_IS_EMPTY = "Type account name",
+    NAME_IS_TOO_SHORT = "Account name is too short",
+    NAME_IS_TOO_LONG = "Account name is too long",
+    NAME_IS_NOT_ALLOWED = "This account name is now allowed",
+    PASSWORD_IS_EMPTY = "Type password",
+    PASSWORD_IS_TOO_LONG = "Password is too long",
+    PASSWORD_IS_TOO_SHORT = "Password is too short",
+    PASSWORD_IS_NOT_ALLOWED = "This password is now allowed",
+    PASSWORD_IS_EQUAL_NAME = "Password cannot be same as name",
+    REPEAT_PASSWORD_IS_EMPTY = "Type password repeat",
+    REPEAT_PASSWORD_IS_NOT_MATCHED = "Password repeat not matched with password",
+    WRONG_NAME_PASSWORD_PAIR = "Wrong name or/and password",
+    ATTEMPTS_LEFT = " (attempts left: %d)",
+    LAST_SERIAL_DIFFERENT = "Your current serial and last account serial are different",
+    REGISTER_SERIAL_DIFFERENT = "Your current serial and registration account serial are different",
+    ACCOUNT_IS_OCCUPIED = "This account is already in use",
+    NAME_ALREADY_EXISTS = "This account name is already exists",
+    ACCOUNT_REGISTERED = "Account registered",
+    SUCCESSFUL_LOGIN = "Successful login",
+    UNKNOWN_ERROR = "Unknown error"
+}
+
